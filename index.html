@@ -50,18 +50,80 @@
             transform: scale(0.95);
         }
 
+        .card-container {
+            perspective: 1000px;
+            cursor: pointer;
+            position: relative;
+            width: 400px;
+            height: 300px;
+        }
+
         .card {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card.flipped.slide-out-flipped {
+            animation: slideOutFlipped 0.3s ease-in forwards;
+        }
+
+        .card.slide-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        @keyframes slideOutFlipped {
+            from {
+                transform: translateX(0) rotateY(180deg);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%) rotateY(180deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
             background: white;
-            padding: 60px 80px;
+            padding: 60px 40px;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            text-align: center;
-            min-width: 400px;
-            min-height: 300px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            text-align: center;
+        }
+
+        .card-front {
+            /* 앞면 */
+        }
+
+        .card-back {
+            transform: rotateY(180deg);
         }
 
         .character {
@@ -69,12 +131,62 @@
             font-weight: bold;
             color: #333;
             margin-bottom: 20px;
+            white-space: nowrap;
         }
 
         .hint {
             font-size: 18px;
             color: #666;
             margin-top: 20px;
+        }
+
+        /* 모바일 반응형 */
+        @media (max-width: 768px) {
+            .settings-btn {
+                top: 15px;
+                right: 15px;
+                width: 45px;
+                height: 45px;
+                font-size: 20px;
+            }
+
+            .card-container {
+                width: 90vw;
+                max-width: 350px;
+                height: 250px;
+            }
+
+            .card-face {
+                padding: 40px 20px;
+            }
+
+            .character {
+                font-size: 80px;
+            }
+
+            .hint {
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .card-container {
+                width: 90vw;
+                max-width: 300px;
+                height: 220px;
+            }
+
+            .card-face {
+                padding: 30px 15px;
+            }
+
+            .character {
+                font-size: 60px;
+            }
+
+            .hint {
+                font-size: 12px;
+            }
         }
 
         .modal {
@@ -195,9 +307,27 @@
 <body>
     <button class="settings-btn" id="settingsBtn">⚙️</button>
 
-    <div class="card" id="card">
-        <div class="character" id="character">準備中...</div>
-        <div class="hint">스페이스바 또는 클릭/터치하여 시작</div>
+    <div class="card-container" id="cardContainer">
+        <div class="card" id="card1">
+            <div class="card-face card-front">
+                <div class="character" id="characterFront1">準備中...</div>
+                <div class="hint">스페이스바 또는 클릭/터치하여 시작</div>
+            </div>
+            <div class="card-face card-back">
+                <div class="character" id="characterBack1"></div>
+                <div class="hint">다시 클릭/터치하여 다음 문제</div>
+            </div>
+        </div>
+        <div class="card" id="card2" style="display: none;">
+            <div class="card-face card-front">
+                <div class="character" id="characterFront2"></div>
+                <div class="hint">스페이스바 또는 클릭/터치하여 시작</div>
+            </div>
+            <div class="card-face card-back">
+                <div class="character" id="characterBack2"></div>
+                <div class="hint">다시 클릭/터치하여 다음 문제</div>
+            </div>
+        </div>
     </div>
 
     <div class="modal" id="settingsModal">
@@ -288,15 +418,58 @@
         let selectedRows = ['A', 'K', 'S', 'T', 'N', 'H', 'M', 'Y', 'R', 'W'];
         let availableChars = [];
         let recentHistory = []; // 최근 나온 글자들 저장 (반복 방지)
+        let activeCard = 1; // 현재 활성화된 카드 (1 또는 2)
+        let isAnimating = false; // 애니메이션 진행 중 플래그
+        let card1State = 'front'; // 'front' 또는 'back'
+        let card2State = 'front'; // 'front' 또는 'back'
 
         // DOM 요소
-        const characterEl = document.getElementById('character');
-        const cardEl = document.getElementById('card');
+        const card1El = document.getElementById('card1');
+        const card2El = document.getElementById('card2');
+        const characterFront1El = document.getElementById('characterFront1');
+        const characterBack1El = document.getElementById('characterBack1');
+        const characterFront2El = document.getElementById('characterFront2');
+        const characterBack2El = document.getElementById('characterBack2');
+        const cardContainerEl = document.getElementById('cardContainer');
         const settingsBtn = document.getElementById('settingsBtn');
         const settingsModal = document.getElementById('settingsModal');
         const closeModalBtn = document.getElementById('closeModal');
         const applyBtn = document.getElementById('applyBtn');
         const rowSelectionEl = document.getElementById('rowSelection');
+
+        // 현재 활성 카드의 DOM 요소 가져오기
+        function getActiveCardElements() {
+            if (activeCard === 1) {
+                return {
+                    cardEl: card1El,
+                    frontEl: characterFront1El,
+                    backEl: characterBack1El
+                };
+            } else {
+                return {
+                    cardEl: card2El,
+                    frontEl: characterFront2El,
+                    backEl: characterBack2El
+                };
+            }
+        }
+
+        // 비활성 카드의 DOM 요소 가져오기
+        function getInactiveCardElements() {
+            if (activeCard === 1) {
+                return {
+                    cardEl: card2El,
+                    frontEl: characterFront2El,
+                    backEl: characterBack2El
+                };
+            } else {
+                return {
+                    cardEl: card1El,
+                    frontEl: characterFront1El,
+                    backEl: characterBack1El
+                };
+            }
+        }
 
         // 로컬 스토리지에서 설정 불러오기
         function loadSettings() {
@@ -350,31 +523,93 @@
             return selectedChar;
         }
 
+        // 각 카드의 상태 가져오기/설정하기
+        function getCardState(cardNum) {
+            return cardNum === 1 ? card1State : card2State;
+        }
+
+        function setCardState(cardNum, newState) {
+            if (cardNum === 1) {
+                card1State = newState;
+            } else {
+                card2State = newState;
+            }
+        }
+
         // 다음 단계로 진행
         function nextStep() {
+            // 애니메이션 중에는 입력 무시
+            if (isAnimating) return;
+
+            const active = getActiveCardElements();
+            const activeCardNum = activeCard;
+
             if (state === 'initial') {
-                // 한국어 표시
+                // 한국어 표시 (앞면)
                 currentChar = getRandomChar();
                 if (!currentChar) {
-                    characterEl.textContent = '행을 선택해주세요';
+                    active.frontEl.textContent = '행을 선택해주세요';
                     return;
                 }
-                characterEl.textContent = currentChar.korean;
+                active.frontEl.textContent = currentChar.korean;
+                active.backEl.textContent = currentChar.hiragana;
+                active.cardEl.classList.remove('flipped', 'slide-out-flipped', 'slide-in');
+                setCardState(activeCardNum, 'front');
                 state = 'korean';
             } else if (state === 'korean') {
-                // 히라가나 표시
-                characterEl.textContent = currentChar.hiragana;
+                // 카드 뒤집기 - 히라가나 표시 (뒷면)
+                isAnimating = true;
+                active.cardEl.classList.add('flipped');
+                setCardState(activeCardNum, 'back');
                 state = 'hiragana';
+
+                // 플립 애니메이션 완료 후
+                setTimeout(() => {
+                    isAnimating = false;
+                }, 600);
             } else if (state === 'hiragana') {
-                // 다음 글자로
+                // 다음 글자로 - 카드 슬라이드 애니메이션
+                isAnimating = true;
+                const inactive = getInactiveCardElements();
+                const inactiveCardNum = activeCard === 1 ? 2 : 1;
+
+                // 1. 새 글자 가져오기
                 currentChar = getRandomChar();
                 if (!currentChar) {
-                    characterEl.textContent = '행을 선택해주세요';
+                    active.frontEl.textContent = '행을 선택해주세요';
+                    active.cardEl.classList.remove('flipped', 'slide-out-flipped', 'slide-in');
+                    setCardState(activeCardNum, 'front');
                     state = 'initial';
+                    isAnimating = false;
                     return;
                 }
-                characterEl.textContent = currentChar.korean;
-                state = 'korean';
+
+                // 2. 비활성 카드를 앞면 상태로 설정하고 새 데이터 넣기 (한국어 보이게)
+                inactive.frontEl.textContent = currentChar.korean;
+                inactive.backEl.textContent = currentChar.hiragana;
+                inactive.cardEl.classList.remove('flipped', 'slide-out-flipped', 'slide-in');
+                setCardState(inactiveCardNum, 'front');
+                inactive.cardEl.style.display = 'block';
+
+                // 3. 현재 카드를 flipped 상태 유지하면서 슬라이드 아웃 (일본어 보이면서 나가기)
+                // flipped 클래스를 유지한 채로 slide-out-flipped 추가
+                active.cardEl.classList.add('slide-out-flipped');
+
+                // 5. 동시에 새 카드 슬라이드 인 (한국어 보이면서 들어오기)
+                requestAnimationFrame(() => {
+                    inactive.cardEl.classList.add('slide-in');
+                });
+
+                // 6. 애니메이션 완료 후 정리
+                setTimeout(() => {
+                    active.cardEl.style.display = 'none';
+                    active.cardEl.classList.remove('flipped', 'slide-out-flipped');
+                    setCardState(activeCardNum, 'front');
+                    inactive.cardEl.classList.remove('slide-in');
+                    activeCard = inactiveCardNum;
+                    state = 'korean';
+                    isAnimating = false;
+                }, 300);
             }
         }
 
@@ -422,7 +657,15 @@
 
             // 상태 초기화
             state = 'initial';
-            characterEl.textContent = '準備中...';
+            activeCard = 1;
+            card1State = 'front';
+            card2State = 'front';
+            isAnimating = false;
+            card1El.style.display = 'block';
+            card2El.style.display = 'none';
+            characterFront1El.textContent = '準備中...';
+            card1El.classList.remove('flipped', 'slide-out-flipped', 'slide-in');
+            card2El.classList.remove('flipped', 'slide-out-flipped', 'slide-in');
         }
 
         // 이벤트 리스너
@@ -469,8 +712,8 @@
             nextStep();
         };
 
-        cardEl.addEventListener('click', handleNext);
-        cardEl.addEventListener('touchend', handleNext);
+        cardContainerEl.addEventListener('click', handleNext);
+        cardContainerEl.addEventListener('touchend', handleNext);
 
         // 초기화
         loadSettings();
