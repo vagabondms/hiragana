@@ -197,7 +197,7 @@
 
     <div class="card" id="card">
         <div class="character" id="character">準備中...</div>
-        <div class="hint">스페이스바 또는 클릭하여 시작</div>
+        <div class="hint">스페이스바 또는 클릭/터치하여 시작</div>
     </div>
 
     <div class="modal" id="settingsModal">
@@ -287,6 +287,7 @@
         let currentChar = null;
         let selectedRows = ['A', 'K', 'S', 'T', 'N', 'H', 'M', 'Y', 'R', 'W'];
         let availableChars = [];
+        let recentHistory = []; // 최근 나온 글자들 저장 (반복 방지)
 
         // DOM 요소
         const characterEl = document.getElementById('character');
@@ -316,11 +317,37 @@
             });
         }
 
-        // 랜덤 글자 선택
+        // 랜덤 글자 선택 (진짜 랜덤 - 최근 것 제외)
         function getRandomChar() {
             if (availableChars.length === 0) return null;
-            const randomIndex = Math.floor(Math.random() * availableChars.length);
-            return availableChars[randomIndex];
+
+            // 사용 가능한 글자가 적으면 히스토리 크기 조정
+            const historySize = Math.min(Math.floor(availableChars.length / 2), 5);
+
+            // 최근 히스토리에 없는 글자들만 필터링
+            let candidateChars = availableChars.filter(char =>
+                !recentHistory.some(recent =>
+                    recent.hiragana === char.hiragana && recent.korean === char.korean
+                )
+            );
+
+            // 후보가 없으면 (모두 최근 것) 히스토리 초기화
+            if (candidateChars.length === 0) {
+                recentHistory = [];
+                candidateChars = availableChars;
+            }
+
+            // 랜덤 선택
+            const randomIndex = Math.floor(Math.random() * candidateChars.length);
+            const selectedChar = candidateChars[randomIndex];
+
+            // 히스토리에 추가
+            recentHistory.push(selectedChar);
+            if (recentHistory.length > historySize) {
+                recentHistory.shift(); // 오래된 것 제거
+            }
+
+            return selectedChar;
         }
 
         // 다음 단계로 진행
@@ -399,23 +426,34 @@
         }
 
         // 이벤트 리스너
-        settingsBtn.addEventListener('click', (e) => {
+        const openSettings = (e) => {
             e.stopPropagation();
+            e.preventDefault();
             renderSettings();
             settingsModal.classList.add('active');
-        });
+        };
 
-        closeModalBtn.addEventListener('click', () => {
+        settingsBtn.addEventListener('click', openSettings);
+        settingsBtn.addEventListener('touchend', openSettings);
+
+        const closeSettings = () => {
             settingsModal.classList.remove('active');
-        });
+        };
 
-        settingsModal.addEventListener('click', (e) => {
+        closeModalBtn.addEventListener('click', closeSettings);
+        closeModalBtn.addEventListener('touchend', closeSettings);
+
+        const closeOnBackdrop = (e) => {
             if (e.target === settingsModal) {
                 settingsModal.classList.remove('active');
             }
-        });
+        };
+
+        settingsModal.addEventListener('click', closeOnBackdrop);
+        settingsModal.addEventListener('touchend', closeOnBackdrop);
 
         applyBtn.addEventListener('click', applySettings);
+        applyBtn.addEventListener('touchend', applySettings);
 
         // 스페이스바 이벤트
         document.addEventListener('keydown', (e) => {
@@ -425,8 +463,14 @@
             }
         });
 
-        // 클릭 이벤트
-        cardEl.addEventListener('click', nextStep);
+        // 클릭 및 터치 이벤트
+        const handleNext = (e) => {
+            e.preventDefault();
+            nextStep();
+        };
+
+        cardEl.addEventListener('click', handleNext);
+        cardEl.addEventListener('touchend', handleNext);
 
         // 초기화
         loadSettings();
