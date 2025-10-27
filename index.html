@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>히라가나 공부</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .settings-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+            z-index: 100;
+        }
+
+        .settings-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .settings-btn:active {
+            transform: scale(0.95);
+        }
+
+        .card {
+            background: white;
+            padding: 60px 80px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            min-width: 400px;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .character {
+            font-size: 120px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .hint {
+            font-size: 18px;
+            color: #666;
+            margin-top: 20px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .modal-header h2 {
+            font-size: 24px;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #666;
+            line-height: 1;
+        }
+
+        .close-btn:hover {
+            color: #333;
+        }
+
+        .row-selection {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .row-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .row-checkbox:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .row-checkbox input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .row-checkbox.checked {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .row-checkbox label {
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 16px;
+        }
+
+        .apply-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .apply-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .apply-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <button class="settings-btn" id="settingsBtn">⚙️</button>
+
+    <div class="card" id="card">
+        <div class="character" id="character">準備中...</div>
+        <div class="hint">스페이스바 또는 클릭하여 시작</div>
+    </div>
+
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>학습할 행 선택</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="row-selection" id="rowSelection"></div>
+            <button class="apply-btn" id="applyBtn">적용</button>
+        </div>
+    </div>
+
+    <script>
+        // 히라가나 데이터 (행별 분류)
+        const hiraganaData = {
+            A: [
+                { hiragana: 'あ', korean: '아' },
+                { hiragana: 'い', korean: '이' },
+                { hiragana: 'う', korean: '우' },
+                { hiragana: 'え', korean: '에' },
+                { hiragana: 'お', korean: '오' }
+            ],
+            K: [
+                { hiragana: 'か', korean: '카' },
+                { hiragana: 'き', korean: '키' },
+                { hiragana: 'く', korean: '쿠' },
+                { hiragana: 'け', korean: '케' },
+                { hiragana: 'こ', korean: '코' }
+            ],
+            S: [
+                { hiragana: 'さ', korean: '사' },
+                { hiragana: 'し', korean: '시' },
+                { hiragana: 'す', korean: '스' },
+                { hiragana: 'せ', korean: '세' },
+                { hiragana: 'そ', korean: '소' }
+            ],
+            T: [
+                { hiragana: 'た', korean: '타' },
+                { hiragana: 'ち', korean: '치' },
+                { hiragana: 'つ', korean: '츠' },
+                { hiragana: 'て', korean: '테' },
+                { hiragana: 'と', korean: '토' }
+            ],
+            N: [
+                { hiragana: 'な', korean: '나' },
+                { hiragana: 'に', korean: '니' },
+                { hiragana: 'ぬ', korean: '누' },
+                { hiragana: 'ね', korean: '네' },
+                { hiragana: 'の', korean: '노' }
+            ],
+            H: [
+                { hiragana: 'は', korean: '하' },
+                { hiragana: 'ひ', korean: '히' },
+                { hiragana: 'ふ', korean: '후' },
+                { hiragana: 'へ', korean: '헤' },
+                { hiragana: 'ほ', korean: '호' }
+            ],
+            M: [
+                { hiragana: 'ま', korean: '마' },
+                { hiragana: 'み', korean: '미' },
+                { hiragana: 'む', korean: '무' },
+                { hiragana: 'め', korean: '메' },
+                { hiragana: 'も', korean: '모' }
+            ],
+            Y: [
+                { hiragana: 'や', korean: '야' },
+                { hiragana: 'ゆ', korean: '유' },
+                { hiragana: 'よ', korean: '요' }
+            ],
+            R: [
+                { hiragana: 'ら', korean: '라' },
+                { hiragana: 'り', korean: '리' },
+                { hiragana: 'る', korean: '루' },
+                { hiragana: 'れ', korean: '레' },
+                { hiragana: 'ろ', korean: '로' }
+            ],
+            W: [
+                { hiragana: 'わ', korean: '와' },
+                { hiragana: 'を', korean: '오(을)' },
+                { hiragana: 'ん', korean: 'ㄴ' }
+            ]
+        };
+
+        // 상태 관리
+        let state = 'initial'; // initial, korean, hiragana
+        let currentChar = null;
+        let selectedRows = ['A', 'K', 'S', 'T', 'N', 'H', 'M', 'Y', 'R', 'W'];
+        let availableChars = [];
+
+        // DOM 요소
+        const characterEl = document.getElementById('character');
+        const cardEl = document.getElementById('card');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeModalBtn = document.getElementById('closeModal');
+        const applyBtn = document.getElementById('applyBtn');
+        const rowSelectionEl = document.getElementById('rowSelection');
+
+        // 로컬 스토리지에서 설정 불러오기
+        function loadSettings() {
+            const saved = localStorage.getItem('selectedRows');
+            if (saved) {
+                selectedRows = JSON.parse(saved);
+            }
+            updateAvailableChars();
+        }
+
+        // 사용 가능한 글자 업데이트
+        function updateAvailableChars() {
+            availableChars = [];
+            selectedRows.forEach(row => {
+                if (hiraganaData[row]) {
+                    availableChars.push(...hiraganaData[row]);
+                }
+            });
+        }
+
+        // 랜덤 글자 선택
+        function getRandomChar() {
+            if (availableChars.length === 0) return null;
+            const randomIndex = Math.floor(Math.random() * availableChars.length);
+            return availableChars[randomIndex];
+        }
+
+        // 다음 단계로 진행
+        function nextStep() {
+            if (state === 'initial') {
+                // 한국어 표시
+                currentChar = getRandomChar();
+                if (!currentChar) {
+                    characterEl.textContent = '행을 선택해주세요';
+                    return;
+                }
+                characterEl.textContent = currentChar.korean;
+                state = 'korean';
+            } else if (state === 'korean') {
+                // 히라가나 표시
+                characterEl.textContent = currentChar.hiragana;
+                state = 'hiragana';
+            } else if (state === 'hiragana') {
+                // 다음 글자로
+                currentChar = getRandomChar();
+                if (!currentChar) {
+                    characterEl.textContent = '행을 선택해주세요';
+                    state = 'initial';
+                    return;
+                }
+                characterEl.textContent = currentChar.korean;
+                state = 'korean';
+            }
+        }
+
+        // 설정 모달 렌더링
+        function renderSettings() {
+            rowSelectionEl.innerHTML = '';
+            Object.keys(hiraganaData).forEach(row => {
+                const isChecked = selectedRows.includes(row);
+                const div = document.createElement('div');
+                div.className = `row-checkbox ${isChecked ? 'checked' : ''}`;
+                div.innerHTML = `
+                    <input type="checkbox" id="row-${row}" ${isChecked ? 'checked' : ''}>
+                    <label for="row-${row}">${row}행</label>
+                `;
+
+                const checkbox = div.querySelector('input');
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        div.classList.add('checked');
+                    } else {
+                        div.classList.remove('checked');
+                    }
+                });
+
+                rowSelectionEl.appendChild(div);
+            });
+        }
+
+        // 설정 적용
+        function applySettings() {
+            selectedRows = [];
+            document.querySelectorAll('.row-checkbox input[type="checkbox"]:checked').forEach(checkbox => {
+                const row = checkbox.id.replace('row-', '');
+                selectedRows.push(row);
+            });
+
+            if (selectedRows.length === 0) {
+                alert('최소 하나의 행을 선택해주세요!');
+                return;
+            }
+
+            localStorage.setItem('selectedRows', JSON.stringify(selectedRows));
+            updateAvailableChars();
+            settingsModal.classList.remove('active');
+
+            // 상태 초기화
+            state = 'initial';
+            characterEl.textContent = '準備中...';
+        }
+
+        // 이벤트 리스너
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            renderSettings();
+            settingsModal.classList.add('active');
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('active');
+        });
+
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                settingsModal.classList.remove('active');
+            }
+        });
+
+        applyBtn.addEventListener('click', applySettings);
+
+        // 스페이스바 이벤트
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                nextStep();
+            }
+        });
+
+        // 클릭 이벤트
+        cardEl.addEventListener('click', nextStep);
+
+        // 초기화
+        loadSettings();
+    </script>
+</body>
+</html>
