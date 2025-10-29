@@ -315,52 +315,112 @@
             font-size: 16px;
         }
 
-        /* Row Selection */
-        .row-selection-section h3 {
+        /* Character Selection */
+        .character-selection-section h3 {
             font-size: 18px;
             color: var(--text-primary);
             margin-bottom: 15px;
         }
 
-        .row-selection {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        .character-selection {
+            display: flex;
+            flex-direction: column;
             gap: 15px;
             margin-bottom: 20px;
         }
 
-        .row-checkbox {
+        .character-row {
             display: flex;
             align-items: center;
-            padding: 12px;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+
+        .row-header {
+            display: flex;
+            align-items: center;
+            min-width: 70px;
+            padding: 8px;
             border: 2px solid #ddd;
-            border-radius: 10px;
+            border-radius: 8px;
+            background: var(--surface-white);
             cursor: pointer;
             transition: all var(--hover-duration);
         }
 
-        .row-checkbox:hover {
+        .row-header:hover {
             border-color: var(--bg-gradient-start);
             background: #f8f9ff;
         }
 
-        .row-checkbox input[type="checkbox"] {
-            margin-right: 8px;
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .row-checkbox.checked {
+        .row-header.checked {
             border-color: var(--bg-gradient-start);
             background: var(--bg-gradient-start);
             color: var(--surface-white);
         }
 
-        .row-checkbox label {
+        .row-header input[type="checkbox"] {
+            margin-right: 6px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .row-header label {
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .character-list {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(60px, 1fr));
+            gap: 8px;
+            flex: 1;
+        }
+
+        .character-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            background: var(--surface-white);
+            cursor: pointer;
+            transition: all var(--hover-duration);
+            font-size: 13px;
+            justify-content: center;
+        }
+
+        .character-checkbox:hover {
+            border-color: var(--bg-gradient-start);
+            background: #f8f9ff;
+        }
+
+        .character-checkbox.checked {
+            border-color: var(--bg-gradient-start);
+            background: var(--bg-gradient-start);
+            color: var(--surface-white);
+        }
+
+        .character-checkbox input[type="checkbox"] {
+            margin-right: 5px;
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+        }
+
+        .character-checkbox label {
             cursor: pointer;
             font-weight: 500;
-            font-size: 16px;
+        }
+
+        .character-checkbox.empty {
+            visibility: hidden;
+            pointer-events: none;
         }
 
         .apply-btn {
@@ -425,9 +485,9 @@
                 <div class="type-selection" id="typeSelection"></div>
             </div>
 
-            <div class="row-selection-section">
-                <h3>학습할 행 선택</h3>
-                <div class="row-selection" id="rowSelection"></div>
+            <div class="character-selection-section">
+                <h3>학습할 글자 선택</h3>
+                <div class="character-selection" id="characterSelection"></div>
             </div>
 
             <button class="apply-btn" id="applyBtn">적용</button>
@@ -575,13 +635,34 @@
             ]
         };
 
+        // 로마자 발음 매핑 (null은 빈 칸)
+        const romajiMap = {
+            A: ['a', 'i', 'u', 'e', 'o'],
+            K: ['ka', 'ki', 'ku', 'ke', 'ko'],
+            S: ['sa', 'si', 'su', 'se', 'so'],
+            T: ['ta', 'chi', 'tsu', 'te', 'to'],
+            N: ['na', 'ni', 'nu', 'ne', 'no'],
+            H: ['ha', 'hi', 'fu', 'he', 'ho'],
+            M: ['ma', 'mi', 'mu', 'me', 'mo'],
+            Y: ['ya', null, 'yu', null, 'yo'],
+            R: ['ra', 'ri', 'ru', 're', 'ro'],
+            W: ['wa', null, null, null, 'wo']
+        };
+
+        // n(ん)은 W행 이후 별도로 표시
+        const extraChars = {
+            W: { index: 5, romaji: 'n' }  // 6번째 위치에 n 추가
+        };
+
         // 상태 관리
         let state = 'initial'; // initial, korean, hiragana
         let currentChar = null;
         let selectedRows = ['A', 'K', 'S', 'T', 'N', 'H', 'M', 'Y', 'R', 'W'];
         let selectedTypes = ['hiragana']; // 'hiragana', 'katakana' 배열
+        let selectedCharacters = {}; // 개별 글자 선택 상태
         let availableChars = [];
-        let recentHistory = []; // 최근 나온 글자들 저장 (반복 방지)
+        let remainingChars = []; // 남은 글자들 (카드 덱)
+        let consumedChars = []; // 사용된 글자들
         let activeCard = 1; // 현재 활성화된 카드 (1 또는 2)
         let isAnimating = false; // 애니메이션 진행 중 플래그
         let card1State = 'front'; // 'front' 또는 'back'
@@ -602,7 +683,7 @@
         const closeModalBtn = document.getElementById('closeModal');
         const applyBtn = document.getElementById('applyBtn');
         const typeSelectionEl = document.getElementById('typeSelection');
-        const rowSelectionEl = document.getElementById('rowSelection');
+        const characterSelectionEl = document.getElementById('characterSelection');
 
         // 현재 활성 카드의 DOM 요소 가져오기
         function getActiveCardElements() {
@@ -642,6 +723,24 @@
             }
         }
 
+        // selectedCharacters 초기화 (모든 글자 선택 상태)
+        function initializeSelectedCharacters() {
+            const result = {};
+            ['hiragana', 'katakana'].forEach(type => {
+                result[type] = {};
+                Object.keys(romajiMap).forEach(row => {
+                    // null이 아닌 항목만 true로 초기화
+                    result[type][row] = romajiMap[row].map(r => r !== null);
+
+                    // W행의 경우 n 추가
+                    if (row === 'W' && extraChars[row]) {
+                        result[type][row].push(true);
+                    }
+                });
+            });
+            return result;
+        }
+
         // 로컬 스토리지에서 설정 불러오기
         function loadSettings() {
             const savedRows = localStorage.getItem('selectedRows');
@@ -654,69 +753,72 @@
                 selectedTypes = JSON.parse(savedTypes);
             }
 
+            const savedCharacters = localStorage.getItem('selectedCharacters');
+            if (savedCharacters) {
+                selectedCharacters = JSON.parse(savedCharacters);
+            } else {
+                selectedCharacters = initializeSelectedCharacters();
+            }
+
             updateAvailableChars();
+
+            // 카드 덱 초기화
+            remainingChars = [...availableChars];
+            consumedChars = [];
         }
 
         // 사용 가능한 글자 업데이트
         function updateAvailableChars() {
             availableChars = [];
 
-            selectedRows.forEach(row => {
+            Object.keys(romajiMap).forEach(row => {
                 // 히라가나 추가
-                if (selectedTypes.includes('hiragana') && hiraganaData[row]) {
-                    hiraganaData[row].forEach(char => {
-                        availableChars.push({
-                            ...char,
-                            type: 'hiragana',
-                            japanese: char.hiragana
-                        });
+                if (selectedTypes.includes('hiragana') && hiraganaData[row] && selectedCharacters.hiragana[row]) {
+                    hiraganaData[row].forEach((char, index) => {
+                        if (selectedCharacters.hiragana[row][index]) {
+                            availableChars.push({
+                                ...char,
+                                type: 'hiragana',
+                                japanese: char.hiragana
+                            });
+                        }
                     });
                 }
 
                 // 가타카나 추가
-                if (selectedTypes.includes('katakana') && katakanaData[row]) {
-                    katakanaData[row].forEach(char => {
-                        availableChars.push({
-                            ...char,
-                            type: 'katakana',
-                            japanese: char.katakana
-                        });
+                if (selectedTypes.includes('katakana') && katakanaData[row] && selectedCharacters.katakana[row]) {
+                    katakanaData[row].forEach((char, index) => {
+                        if (selectedCharacters.katakana[row][index]) {
+                            availableChars.push({
+                                ...char,
+                                type: 'katakana',
+                                japanese: char.katakana
+                            });
+                        }
                     });
                 }
             });
         }
 
-        // 랜덤 글자 선택 (진짜 랜덤 - 최근 것 제외)
+        // 랜덤 글자 선택 (카드 덱 방식 - 한 번 나온 글자는 모두 소비할 때까지 제외)
         function getRandomChar() {
             if (availableChars.length === 0) return null;
 
-            // 사용 가능한 글자가 적으면 히스토리 크기 조정
-            const historySize = Math.min(Math.floor(availableChars.length / 2), 5);
-
-            // 최근 히스토리에 없는 글자들만 필터링
-            let candidateChars = availableChars.filter(char =>
-                !recentHistory.some(recent =>
-                    recent.japanese === char.japanese &&
-                    recent.korean === char.korean &&
-                    recent.type === char.type
-                )
-            );
-
-            // 후보가 없으면 (모두 최근 것) 히스토리 초기화
-            if (candidateChars.length === 0) {
-                recentHistory = [];
-                candidateChars = availableChars;
+            // 남은 글자가 없으면 덱을 다시 채움 (리셔플)
+            if (remainingChars.length === 0) {
+                remainingChars = [...availableChars];
+                consumedChars = [];
             }
 
-            // 랜덤 선택
-            const randomIndex = Math.floor(Math.random() * candidateChars.length);
-            const selectedChar = candidateChars[randomIndex];
+            // 남은 글자 중에서 랜덤 선택
+            const randomIndex = Math.floor(Math.random() * remainingChars.length);
+            const selectedChar = remainingChars[randomIndex];
 
-            // 히스토리에 추가
-            recentHistory.push(selectedChar);
-            if (recentHistory.length > historySize) {
-                recentHistory.shift(); // 오래된 것 제거
-            }
+            // 선택된 글자를 남은 목록에서 제거 (카드를 버림)
+            remainingChars.splice(randomIndex, 1);
+
+            // 사용된 목록에 추가
+            consumedChars.push(selectedChar);
 
             return selectedChar;
         }
@@ -845,27 +947,162 @@
                 typeSelectionEl.appendChild(div);
             });
 
-            // 행 선택 렌더링
-            rowSelectionEl.innerHTML = '';
-            Object.keys(hiraganaData).forEach(row => {
-                const isChecked = selectedRows.includes(row);
-                const div = document.createElement('div');
-                div.className = `row-checkbox ${isChecked ? 'checked' : ''}`;
-                div.innerHTML = `
-                    <input type="checkbox" id="row-${row}" ${isChecked ? 'checked' : ''}>
-                    <label for="row-${row}">${row}행</label>
+            // 개별 글자 선택 렌더링
+            characterSelectionEl.innerHTML = '';
+            Object.keys(romajiMap).forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'character-row';
+
+                // 행 헤더 (행 전체 선택 체크박스)
+                const rowHeaderDiv = document.createElement('div');
+                // null이 아닌 항목만 검사
+                const allSelected = selectedCharacters.hiragana[row].every((v, i) =>
+                    romajiMap[row][i] === null || v
+                ) && selectedCharacters.katakana[row].every((v, i) =>
+                    romajiMap[row][i] === null || v
+                );
+                rowHeaderDiv.className = `row-header ${allSelected ? 'checked' : ''}`;
+                rowHeaderDiv.innerHTML = `
+                    <input type="checkbox" id="row-header-${row}" ${allSelected ? 'checked' : ''}>
+                    <label for="row-header-${row}">${row}행</label>
                 `;
 
-                const checkbox = div.querySelector('input');
-                checkbox.addEventListener('change', (e) => {
-                    if (e.target.checked) {
-                        div.classList.add('checked');
-                    } else {
-                        div.classList.remove('checked');
+                const rowHeaderCheckbox = rowHeaderDiv.querySelector('input');
+                rowHeaderCheckbox.addEventListener('change', (e) => {
+                    const checked = e.target.checked;
+                    // 행의 모든 글자 선택/해제 (null인 항목은 그대로 유지)
+                    selectedCharacters.hiragana[row] = selectedCharacters.hiragana[row].map((v, i) =>
+                        romajiMap[row][i] === null ? false : checked
+                    );
+                    selectedCharacters.katakana[row] = selectedCharacters.katakana[row].map((v, i) =>
+                        romajiMap[row][i] === null ? false : checked
+                    );
+
+                    // W행의 n도 업데이트
+                    if (row === 'W') {
+                        selectedCharacters.hiragana[row][5] = checked;
+                        selectedCharacters.katakana[row][5] = checked;
                     }
+
+                    // UI 업데이트
+                    if (checked) {
+                        rowHeaderDiv.classList.add('checked');
+                    } else {
+                        rowHeaderDiv.classList.remove('checked');
+                    }
+
+                    // 개별 글자 체크박스들도 업데이트
+                    const charCheckboxes = rowDiv.querySelectorAll('.character-checkbox:not(.empty) input');
+                    charCheckboxes.forEach(cb => {
+                        cb.checked = checked;
+                        if (checked) {
+                            cb.parentElement.classList.add('checked');
+                        } else {
+                            cb.parentElement.classList.remove('checked');
+                        }
+                    });
                 });
 
-                rowSelectionEl.appendChild(div);
+                // 개별 글자 리스트
+                const charListDiv = document.createElement('div');
+                charListDiv.className = 'character-list';
+
+                // 5개 고정 칸 + W행의 경우 n 추가
+                const totalSlots = row === 'W' ? 6 : 5;
+                let dataIndex = 0;
+
+                for (let slotIndex = 0; slotIndex < totalSlots; slotIndex++) {
+                    const charDiv = document.createElement('div');
+
+                    // W행의 6번째 슬롯은 n
+                    if (row === 'W' && slotIndex === 5) {
+                        const isChecked = selectedCharacters.hiragana[row][5] &&
+                                          selectedCharacters.katakana[row][5];
+                        charDiv.className = `character-checkbox ${isChecked ? 'checked' : ''}`;
+                        charDiv.innerHTML = `
+                            <input type="checkbox" id="char-${row}-5" ${isChecked ? 'checked' : ''}>
+                            <label for="char-${row}-5">n</label>
+                        `;
+
+                        const charCheckbox = charDiv.querySelector('input');
+                        charCheckbox.addEventListener('change', (e) => {
+                            const checked = e.target.checked;
+                            selectedCharacters.hiragana[row][5] = checked;
+                            selectedCharacters.katakana[row][5] = checked;
+
+                            if (checked) {
+                                charDiv.classList.add('checked');
+                            } else {
+                                charDiv.classList.remove('checked');
+                            }
+
+                            // 행 전체 선택 상태 업데이트
+                            const allChecked = selectedCharacters.hiragana[row].every((v, i) =>
+                                romajiMap[row][i] === null || v
+                            ) && selectedCharacters.katakana[row].every((v, i) =>
+                                romajiMap[row][i] === null || v
+                            );
+                            rowHeaderCheckbox.checked = allChecked;
+                            if (allChecked) {
+                                rowHeaderDiv.classList.add('checked');
+                            } else {
+                                rowHeaderDiv.classList.remove('checked');
+                            }
+                        });
+                    } else if (romajiMap[row][slotIndex] === null) {
+                        // 빈 칸
+                        charDiv.className = 'character-checkbox empty';
+                        charDiv.innerHTML = '<span></span>';
+                    } else {
+                        // 일반 글자
+                        const romaji = romajiMap[row][slotIndex];
+                        const isChecked = selectedCharacters.hiragana[row][dataIndex] &&
+                                          selectedCharacters.katakana[row][dataIndex];
+                        charDiv.className = `character-checkbox ${isChecked ? 'checked' : ''}`;
+                        charDiv.innerHTML = `
+                            <input type="checkbox" id="char-${row}-${dataIndex}" ${isChecked ? 'checked' : ''}>
+                            <label for="char-${row}-${dataIndex}">${romaji}</label>
+                        `;
+
+                        const currentDataIndex = dataIndex;
+                        const charCheckbox = charDiv.querySelector('input');
+                        charCheckbox.addEventListener('change', (e) => {
+                            const checked = e.target.checked;
+                            selectedCharacters.hiragana[row][currentDataIndex] = checked;
+                            selectedCharacters.katakana[row][currentDataIndex] = checked;
+
+                            if (checked) {
+                                charDiv.classList.add('checked');
+                            } else {
+                                charDiv.classList.remove('checked');
+                            }
+
+                            // 행 전체 선택 상태 업데이트
+                            const allChecked = selectedCharacters.hiragana[row].every((v, i) =>
+                                romajiMap[row][i] === null || v
+                            ) && selectedCharacters.katakana[row].every((v, i) =>
+                                romajiMap[row][i] === null || v
+                            );
+                            rowHeaderCheckbox.checked = allChecked;
+                            if (allChecked) {
+                                rowHeaderDiv.classList.add('checked');
+                            } else {
+                                rowHeaderDiv.classList.remove('checked');
+                            }
+                        });
+                    }
+
+                    charListDiv.appendChild(charDiv);
+
+                    // null이 아닌 경우에만 dataIndex 증가
+                    if (romajiMap[row][slotIndex] !== null) {
+                        dataIndex++;
+                    }
+                }
+
+                rowDiv.appendChild(rowHeaderDiv);
+                rowDiv.appendChild(charListDiv);
+                characterSelectionEl.appendChild(rowDiv);
             });
         }
 
@@ -883,22 +1120,28 @@
                 return;
             }
 
-            // 행 선택 수집
-            selectedRows = [];
-            document.querySelectorAll('.row-checkbox input[type="checkbox"]:checked').forEach(checkbox => {
-                const row = checkbox.id.replace('row-', '');
-                selectedRows.push(row);
+            // 최소 1개 글자 선택 검증
+            let hasSelectedChar = false;
+            Object.keys(selectedCharacters.hiragana).forEach(row => {
+                if (selectedCharacters.hiragana[row].some(v => v) || selectedCharacters.katakana[row].some(v => v)) {
+                    hasSelectedChar = true;
+                }
             });
 
-            if (selectedRows.length === 0) {
-                alert('최소 하나의 행을 선택해주세요!');
+            if (!hasSelectedChar) {
+                alert('최소 하나의 글자를 선택해주세요!');
                 return;
             }
 
             // localStorage에 저장
             localStorage.setItem('selectedTypes', JSON.stringify(selectedTypes));
-            localStorage.setItem('selectedRows', JSON.stringify(selectedRows));
+            localStorage.setItem('selectedCharacters', JSON.stringify(selectedCharacters));
             updateAvailableChars();
+
+            // 카드 덱 리셋
+            remainingChars = [...availableChars];
+            consumedChars = [];
+
             settingsModal.classList.remove('active');
 
             // 상태 초기화
